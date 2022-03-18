@@ -1,9 +1,8 @@
-import { WalletEntity } from './../entities/wallets.entity';
 import { ACCESS_TIME_DATA_LAYOUT } from './../utils/util';
 import TokenService from '@/services/tokens.service';
 import { MediaData } from './../interfaces/media.interface';
 import { MediaEntity, AccessTimeEntity } from './../entities/media.entity';
-import { CreateMediaDto } from './../dtos/media.dto';
+import { CreateMediaDto, PurchaseTimeDto } from './../dtos/media.dto';
 import { EntityRepository, Repository } from 'typeorm';
 import { TokenEntity } from '@/entities/tokens.entity';
 import { PDFDocument } from 'pdf-lib';
@@ -20,6 +19,7 @@ import { Keypair, PublicKey, SystemProgram, Connection, TransactionInstruction, 
 import { PROGRAM_ID } from '@/config';
 import { AccountLayout, mintTo, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import BN from 'bn.js';
+import { logger } from '@/utils/logger';
 
 @EntityRepository()
 class MediaService extends Repository<TokenEntity> {
@@ -111,7 +111,7 @@ class MediaService extends Repository<TokenEntity> {
     return createMedia;
   }
 
-  public async makeAccessTime(media_id: number, user_id: number, time: number, distributor_user_id: number): Promise<string> {
+  public async makeAccessTime(PurchaseTime: PurchaseTimeDto): Promise<string> {
     const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
 
     const adminUserData: UserEntity = await UserEntity.findOne(5, { relations: ['wallet'] });
@@ -120,7 +120,7 @@ class MediaService extends Repository<TokenEntity> {
 
     const payerSystemAccount = Keypair.fromSecretKey(Uint8Array.from(privateKeyDecoded));
 
-    const buyerUserData: UserEntity = await UserEntity.findOne(user_id, { relations: ['wallet'] });
+    const buyerUserData: UserEntity = await UserEntity.findOne(PurchaseTime.user_id, { relations: ['wallet'] });
 
     const buyerPrivateKey = buyerUserData.wallet.secret_key.split(',').map(s => parseInt(s));
 
@@ -139,7 +139,7 @@ class MediaService extends Repository<TokenEntity> {
       programId: lvmProgramId,
     });
 
-    const mediaData: MediaEntity = await MediaEntity.findOne(media_id, { relations: ['author'] });
+    const mediaData: MediaEntity = await MediaEntity.findOne(PurchaseTime.media_id, { relations: ['author'] });
 
     const media_program_account = new PublicKey(mediaData.program_key);
 
@@ -155,7 +155,7 @@ class MediaService extends Repository<TokenEntity> {
 
     const authorTokenAccount = await this.getTokenAccount(authorSystemAccount.publicKey);
 
-    const distibutorUserData = await UserEntity.findOne(distributor_user_id, { relations: ['wallet'] });
+    const distibutorUserData = await UserEntity.findOne(PurchaseTime.distributor_user_id, { relations: ['wallet'] });
 
     const distributorPrivateKey = distibutorUserData.wallet.secret_key.split(',').map(s => parseInt(s));
 
@@ -171,7 +171,7 @@ class MediaService extends Repository<TokenEntity> {
 
     await mintTo(connection, payerSystemAccount, lvmToken, buyerTokenAccount, payerSystemAccount, 300);
 
-    // purchasee access time
+    // purchase access time
 
     const purchaseAccessTime = new TransactionInstruction({
       programId: lvmProgramId,
@@ -180,7 +180,7 @@ class MediaService extends Repository<TokenEntity> {
         {
           pubkey: buyerSystemAccount.publicKey,
           isSigner: true,
-          isWritable: false,
+          isWritable: true,
         },
         {
           pubkey: lvmAccount.publicKey,
@@ -190,27 +190,27 @@ class MediaService extends Repository<TokenEntity> {
         {
           pubkey: media_program_account,
           isSigner: false,
-          isWritable: false,
+          isWritable: true,
         },
         {
           pubkey: authorTokenAccount,
           isSigner: false,
-          isWritable: false,
+          isWritable: true,
         },
         {
           pubkey: distributorTokenAccount,
           isSigner: false,
-          isWritable: false,
+          isWritable: true,
         },
         {
           pubkey: buyerTokenAccount,
           isSigner: false,
-          isWritable: false,
+          isWritable: true,
         },
         { pubkey: SYSVAR_RENT_PUBKEY, isSigner: false, isWritable: false },
-        { pubkey: lvmToken, isSigner: false, isWritable: false },
+        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       ],
-      data: Buffer.from(Uint8Array.of(1, ...new BN(time).toArray('le', 8))),
+      data: Buffer.from(Uint8Array.of(1, ...new BN(PurchaseTime.time).toArray('le', 8))),
     });
 
     // create new transaction
@@ -228,7 +228,7 @@ class MediaService extends Repository<TokenEntity> {
     accessTime.media = mediaData;
     accessTime.user = buyerUserData;
     accessTime.program_key = lvmAccount.publicKey.toBase58();
-    accessTime.total_time = time;
+    accessTime.total_time = PurchaseTime.time;
     accessTime.time_spent = 0;
 
     const createAccessTime = await AccessTimeEntity.create(accessTime).save();
@@ -265,7 +265,7 @@ class MediaService extends Repository<TokenEntity> {
 
   private async encryptMedia(mediaData: MediaEntity, userPublicKey: PublicKey, program_key: string, secret_key: string) {
     const filePath = '../Backend/media/' + mediaData.public_key + '.pdf';
-    fs.readFile(filePath, { encoding: 'utf-8' }, async function (err, data) {
+    fs.readFile(filePath, async (err, data) => {
       if (!err) {
         const fileContent = data;
 
@@ -356,7 +356,7 @@ class MediaService extends Repository<TokenEntity> {
 
         const encryptedDecoder = this.encryptFile(decoder, decoderEncrptionKey);
 
-        const encryptedPage = this.encryptFile(data, secret_key);
+        const encryptedPage = this.encryptFile(data.toString(), secret_key);
 
         const spdfContent = `{
           "metadata": {
@@ -376,7 +376,7 @@ class MediaService extends Repository<TokenEntity> {
             "decoder": ${encryptedDecoder}
           }`;
 
-        fse.outputFile('../Backend/access_time/' + program_key + '.spdf', spdfContent, err => {
+        fse.outputFile('../Backend/AccessTime/' + program_key + '.spf', spdfContent, err => {
           if (err) {
             console.error(err);
             return;

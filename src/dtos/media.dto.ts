@@ -12,3 +12,10 @@ export class CreateMediaDto {
   @IsString()
   public author_id: string;
 }
+
+export class PurchaseTimeDto {
+  public media_id: number;
+  public user_id: number;
+  public time: number;
+  public distributor_user_id: number;
+}
