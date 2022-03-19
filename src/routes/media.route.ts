@@ -13,7 +13,7 @@ class BookRoute implements Routes {
 
   private initializeRoutes() {
     this.router.post(`${this.path}/create`, this.mediaController.createMedia);
-    this.router.post(`${this.path}/purchase_time`, this.mediaController.purchaseMediaTime);
+    this.router.get(`/test${this.path}/purchase_time/:time`, this.mediaController.purchaseMediaTime);
   }
 }
 

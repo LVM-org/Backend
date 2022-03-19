@@ -16,7 +16,16 @@ import { Author } from '@/interfaces/authors.interface';
 import { AuthorEntity } from '@/entities/author.entity';
 import { UserEntity } from '@/entities/users.entity';
 import { Keypair, PublicKey, SystemProgram, Connection, TransactionInstruction, SYSVAR_RENT_PUBKEY, Transaction } from '@solana/web3.js';
-import { PROGRAM_ID } from '@/config';
+import {
+  ADMIN_PRIVATE_KEY,
+  AUTHOR_PRIVATE_KEY,
+  BUYER_PRIVATE_KEY,
+  DISTRIBUTOR_PRIVATE_KEY,
+  MEDIA_PROGRAM_KEY,
+  MEDIA_PUBLIC_KEY,
+  PROGRAM_ID,
+  TOKEN_PUBLIC_KEY,
+} from '@/config';
 import { AccountLayout, mintTo, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import BN from 'bn.js';
 import { logger } from '@/utils/logger';
@@ -115,15 +124,15 @@ class MediaService extends Repository<TokenEntity> {
   public async makeAccessTime(PurchaseTime: PurchaseTimeDto): Promise<string> {
     const connection = new Connection('https://api.devnet.solana.com', 'confirmed');
 
-    const adminUserData: UserEntity = await UserEntity.findOne(5, { relations: ['wallet'] });
+    //const adminUserData: UserEntity = await UserEntity.findOne(5, { relations: ['wallet'] });
 
-    const privateKeyDecoded = adminUserData.wallet.secret_key.split(',').map(s => parseInt(s));
+    const privateKeyDecoded = ADMIN_PRIVATE_KEY.split(',').map(s => parseInt(s));
 
     const payerSystemAccount = Keypair.fromSecretKey(Uint8Array.from(privateKeyDecoded));
 
-    const buyerUserData: UserEntity = await UserEntity.findOne(PurchaseTime.user_id, { relations: ['wallet'] });
+    //const buyerUserData: UserEntity = await UserEntity.findOne(PurchaseTime.user_id, { relations: ['wallet'] });
 
-    const buyerPrivateKey = buyerUserData.wallet.secret_key.split(',').map(s => parseInt(s));
+    const buyerPrivateKey = BUYER_PRIVATE_KEY.split(',').map(s => parseInt(s));
 
     const buyerSystemAccount = Keypair.fromSecretKey(Uint8Array.from(buyerPrivateKey));
 
@@ -140,25 +149,25 @@ class MediaService extends Repository<TokenEntity> {
       programId: lvmProgramId,
     });
 
-    const mediaData: MediaEntity = await MediaEntity.findOne(PurchaseTime.media_id, { relations: ['author'] });
+    // const mediaData: MediaEntity = await MediaEntity.findOne(PurchaseTime.media_id, { relations: ['author'] });
 
-    const media_program_account = new PublicKey(mediaData.program_key);
+    const media_program_account = new PublicKey(MEDIA_PROGRAM_KEY);
 
-    const authorData: AuthorEntity = await AuthorEntity.findOne(mediaData.author.id, { relations: ['user'] });
+    //const authorData: AuthorEntity = await AuthorEntity.findOne(mediaData.author.id, { relations: ['user'] });
 
-    const authorUserData: UserEntity = await UserEntity.findOne(authorData.user.id, { relations: ['wallet'] });
+    //const authorUserData: UserEntity = await UserEntity.findOne(authorData.user.id, { relations: ['wallet'] });
 
-    const authorPrivateKey = authorUserData.wallet.secret_key.split(',').map(s => parseInt(s));
+    const authorPrivateKey = AUTHOR_PRIVATE_KEY.split(',').map(s => parseInt(s));
 
     const authorSystemAccount = Keypair.fromSecretKey(Uint8Array.from(authorPrivateKey));
 
-    const lvmTokenData: TokenEntity = await TokenEntity.findOne(1);
+    //const lvmTokenData: TokenEntity = await TokenEntity.findOne(1);
 
     const authorTokenAccount = await this.getTokenAccount(authorSystemAccount.publicKey);
 
-    const distibutorUserData = await UserEntity.findOne(PurchaseTime.distributor_user_id, { relations: ['wallet'] });
+    //const distibutorUserData = await UserEntity.findOne(PurchaseTime.distributor_user_id, { relations: ['wallet'] });
 
-    const distributorPrivateKey = distibutorUserData.wallet.secret_key.split(',').map(s => parseInt(s));
+    const distributorPrivateKey = DISTRIBUTOR_PRIVATE_KEY.split(',').map(s => parseInt(s));
 
     const distributorSystemAccount = Keypair.fromSecretKey(Uint8Array.from(distributorPrivateKey));
 
@@ -166,7 +175,7 @@ class MediaService extends Repository<TokenEntity> {
 
     const buyerTokenAccount = await this.getTokenAccount(buyerSystemAccount.publicKey);
 
-    const lvmToken = new PublicKey(lvmTokenData.public_key);
+    const lvmToken = new PublicKey(TOKEN_PUBLIC_KEY);
 
     // mint some token into buyers account
 
@@ -224,21 +233,21 @@ class MediaService extends Repository<TokenEntity> {
 
     // save token data
 
-    const accessTime = new AccessTimeEntity();
+    // const accessTime = new AccessTimeEntity();
 
-    accessTime.media = mediaData;
-    accessTime.user = buyerUserData;
-    accessTime.program_key = lvmAccount.publicKey.toBase58();
-    accessTime.total_time = PurchaseTime.time;
-    accessTime.time_spent = 0;
+    // accessTime.media = mediaData;
+    // accessTime.user = buyerUserData;
+    // accessTime.program_key = lvmAccount.publicKey.toBase58();
+    // accessTime.total_time = PurchaseTime.time;
+    // accessTime.time_spent = 0;
 
-    const createAccessTime = await AccessTimeEntity.create(accessTime).save();
+    // const createAccessTime = await AccessTimeEntity.create(accessTime).save();
 
     const programAccountSecret = lvmAccount.secretKey;
 
     const privateKeyToString = Buffer.from(programAccountSecret).toString('base64');
 
-    await this.encryptMedia(mediaData, buyerSystemAccount.publicKey, createAccessTime.program_key, privateKeyToString);
+    await this.encryptMedia(MEDIA_PUBLIC_KEY, buyerSystemAccount.publicKey, lvmAccount.publicKey.toBase58(), privateKeyToString);
 
     return lvmAccount.publicKey.toBase58();
   }
@@ -264,8 +273,8 @@ class MediaService extends Repository<TokenEntity> {
     }
   }
 
-  private async encryptMedia(mediaData: MediaEntity, userPublicKey: PublicKey, program_key: string, secret_key: string) {
-    const filePath = '../Backend/media/' + mediaData.public_key + '.pdf';
+  private async encryptMedia(media_key: string, userPublicKey: PublicKey, program_key: string, secret_key: string) {
+    const filePath = '../Backend/media/' + media_key + '.pdf';
     fs.readFile(filePath, async (err, data) => {
       if (!err) {
         const fileContent = data.toString('base64');

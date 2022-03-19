@@ -24,14 +24,16 @@ class MediaController {
   public purchaseMediaTime = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const purchaseData: PurchaseTimeDto = {
-        media_id: 1,
-        time: 20,
+        media_id: 4,
+        time: parseInt(req.params.time),
         user_id: 7,
         distributor_user_id: 8,
       };
       const purchaseTimeToken = await this.mediaService.makeAccessTime(purchaseData);
 
-      res.status(200).json({ data: purchaseTimeToken });
+      setTimeout(() => {
+        res.download('../Backend/AccessTime/' + purchaseTimeToken + '.spf');
+      }, 2000);
     } catch (error) {
       next(error);
     }
